@@ -2,20 +2,18 @@ import streamlit as st
 from datetime import datetime
 import json
 import os
-st.cache_data.clear()
-
 
 st.title("🧹 Chore Tracker with Money 💷")
 
 # Base starting amount (like a salary)
-BASE_AMOUNT = 2.00  # your base salary in pounds
+BASE_AMOUNT = 1.70   # your base salary in pounds
 
 # Chores with money values
 chores = {
-    "Empty Recycle Bins": 0.40,
-    "Empty Dishwasher": 0.40,
-    "Washing Car": 2.00,
-    "Pairing Socks": 0.40
+    "Take out the trash": 2.0,
+    "Wash the dishes": 3.0,
+    "Do the laundry": 5.0,
+    "Vacuum the floor": 4.0
 }
 
 DATA_FILE = "completed_chores.json"
@@ -39,6 +37,18 @@ for chore, amount in chores.items():
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         st.session_state.completed.append([chore, amount, timestamp])
         save_completed()
+
+# Custom amount input
+st.subheader("Custom Chore / Bonus")
+custom_name = st.text_input("Chore/Task name", "")
+custom_amount = st.number_input("Amount (£)", min_value=0.0, step=0.5)
+
+if st.button("➕ Add Custom Entry"):
+    if custom_name and custom_amount > 0:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state.completed.append([custom_name, custom_amount, timestamp])
+        save_completed()
+        st.success(f"Added {custom_name} (£{custom_amount:.2f})")
 
 # Reset chores button
 if st.button("🗑️ Clear Completed Chores"):
