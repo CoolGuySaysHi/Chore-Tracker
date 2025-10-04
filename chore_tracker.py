@@ -8,7 +8,7 @@ st.cache_data.clear()
 st.title("🧹 Chore Tracker with Money 💷")
 
 # Base starting amount (like a salary)
-BASE_AMOUNT = 1.70   # your base salary in pounds
+BASE_AMOUNT = 2.00  # your base salary in pounds
 
 # Chores with money values
 chores = {
