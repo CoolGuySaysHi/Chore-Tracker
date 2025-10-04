@@ -6,14 +6,14 @@ import os
 st.title("🧹 Chore Tracker with Money 💷")
 
 # Base starting amount (like a salary)
-BASE_AMOUNT = 1.70   # your base salary in pounds
+BASE_AMOUNT = 2.00  # your base salary in pounds
 
 # Chores with money values
 chores = {
-    "Take out the trash": 2.0,
-    "Wash the dishes": 3.0,
-    "Do the laundry": 5.0,
-    "Vacuum the floor": 4.0
+    "Empty Recycle Bins": 0.40,
+    "Empty Dishwasher": 0.40,
+    "Washing Car": 2.00,
+    "Pairing Socks": 0.40
 }
 
 DATA_FILE = "completed_chores.json"
