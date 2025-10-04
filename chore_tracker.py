@@ -73,7 +73,7 @@ if st.button("➕ Add to Available Chores"):
         chores[new_chore_name] = new_chore_amount
         save_chores()
         st.success(f"Added '{new_chore_name}' (£{new_chore_amount:.2f}) to available chores!")
-        st.experimental_rerun()
+        st.rerun()
 
 # --- Custom One-off Entry ---
 st.subheader("Custom One-off Entry")
