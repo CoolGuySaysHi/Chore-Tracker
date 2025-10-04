@@ -61,7 +61,7 @@ for chore, amount in chores.items():
         if st.button("❌", key=f"del_{chore}"):
             del chores[chore]
             save_chores()
-            st.experimental_rerun()
+            st.rerun()
 
 # --- Add New Available Chore ---
 st.subheader("Add New Chore")
