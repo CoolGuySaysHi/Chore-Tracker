@@ -90,8 +90,9 @@ if st.session_state.user is None:
                 users[new_user] = {
                     "password": hash_password(new_pass),
                     "base_amount": base_amount,
-                    "theme": "#0D1B4C",  # theme color
-                    "avatar": None
+                    "theme": "#0D1B4C",
+                    "avatar": None,
+                    "level": 1  # initialize level
                 }
                 ensure_user_folder(new_user)
                 save_users(users)
@@ -108,6 +109,7 @@ else:
     BASE_AMOUNT = users[user].get("base_amount", 1.70)
     THEME_COLOR = users[user].get("theme", "#0D1B4C")
     AVATAR_PATH = users[user].get("avatar")
+    saved_level = users[user].get("level", 1)
 
     DATA_FILE = f"user_data/{user}/completed_chores.json"
     CHORES_FILE = "available_chores.json"
@@ -200,22 +202,26 @@ else:
             st.success("Completed chores cleared!")
 
     # ---------------------------
-    # 📊 Summary Tab with Friday Base Pay
+    # 📊 Summary Tab with Level Save
     # ---------------------------
     with tab2:
         st.subheader("Earnings Summary")
         total_money = sum([amt for _, amt, _ in st.session_state.completed]) + BASE_AMOUNT
         st.markdown(f"**Total Earned (Including Base Pay): £{total_money:.2f}**")
 
-        # Determine level (base counts only on Fridays)
         today = datetime.now()
-        base_for_level = BASE_AMOUNT if today.weekday() == 4 else 0  # Friday=4
+        base_for_level = BASE_AMOUNT if today.weekday() == 4 else 0  # Friday only
         total_for_level = sum([amt for _, amt, _ in st.session_state.completed]) + base_for_level
         level = math.floor(total_for_level / 10) + 1
         next_level_total = level * 10
         progress = total_for_level / next_level_total
         st.markdown(f"**Level:** {level}")
         st.progress(min(progress, 1.0))
+
+        # Save level if changed
+        if users[user].get("level", 1) != level:
+            users[user]["level"] = level
+            save_users(users)
 
         if today.weekday() != 4:
             st.info(f"Next base pay of £{BASE_AMOUNT:.2f} will count toward level this Friday!")
@@ -236,34 +242,24 @@ else:
             monthly_total = monthly_df["Amount"].sum()
             st.write(f"**Last 30 Days:** £{monthly_total:.2f}")
 
-            # Line chart
             daily_totals = df.groupby("Date")["Amount"].sum().reset_index()
             st.line_chart(daily_totals.set_index("Date"))
 
-            # Recent chores
             st.divider()
             st.markdown("### 🧾 Recent Chores")
             for i, row in df.sort_values("Timestamp", ascending=False).head(10).iterrows():
                 st.write(f"{row['Timestamp'].strftime('%Y-%m-%d %H:%M')} — {row['Chore']} (£{row['Amount']:.2f})")
 
-            # Achievements / Badges
             st.divider()
             st.subheader("🏅 Achievements")
             total_chores_done = len(df)
             badges = []
-
-            if total_chores_done >= 5:
-                badges.append("🥉 Bronze — 5 chores done")
-            if total_chores_done >= 10:
-                badges.append("🥈 Silver — 10 chores done")
-            if total_chores_done >= 25:
-                badges.append("🥇 Gold — 25 chores done")
-            if total_chores_done >= 50:
-                badges.append("🏆 Platinum — 50 chores done")
-
+            if total_chores_done >= 5: badges.append("🥉 Bronze — 5 chores done")
+            if total_chores_done >= 10: badges.append("🥈 Silver — 10 chores done")
+            if total_chores_done >= 25: badges.append("🥇 Gold — 25 chores done")
+            if total_chores_done >= 50: badges.append("🏆 Platinum — 50 chores done")
             if badges:
-                for b in badges:
-                    st.write(b)
+                for b in badges: st.write(b)
             else:
                 st.info("Complete more chores to earn achievements!")
 
