@@ -1,9 +1,10 @@
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 import hashlib
 from pathlib import Path
+import pandas as pd
 
 st.set_page_config(page_title="Chore Tracker", page_icon="🧹", layout="centered")
 
@@ -88,7 +89,7 @@ if st.session_state.user is None:
                 users[new_user] = {
                     "password": hash_password(new_pass),
                     "base_amount": base_amount,
-                    "theme": "#4CAF50",  # default green
+                    "theme": "#4CAF50",
                     "avatar": None
                 }
                 ensure_user_folder(new_user)
@@ -143,7 +144,7 @@ else:
         unsafe_allow_html=True,
     )
 
-    tab1, tab2, tab3 = st.tabs(["🏠 Chores", "🧾 Summary", "⚙️ Settings"])
+    tab1, tab2, tab3 = st.tabs(["🏠 Chores", "📊 Summary", "⚙️ Settings"])
 
     # ---------------------------
     # 🏠 Chores Tab
@@ -155,6 +156,7 @@ else:
 
         if AVATAR_PATH and os.path.exists(AVATAR_PATH):
             st.image(AVATAR_PATH, width=100)
+
         st.subheader("Available Chores")
         for chore, amount in chores.items():
             col1, col2 = st.columns([4, 1])
@@ -197,19 +199,67 @@ else:
             st.success("Completed chores cleared!")
 
     # ---------------------------
-    # 🧾 Summary Tab
+    # 📊 Summary Tab (with Achievements)
     # ---------------------------
     with tab2:
-        st.subheader("Completed Chores Log")
+        st.subheader("Earnings Summary")
         total_money = BASE_AMOUNT
         st.markdown(f"**Starting Base: £{BASE_AMOUNT:.2f}**")
 
-        if st.session_state.completed:
-            for c, amt, t in st.session_state.completed:
-                st.write(f"{t} - {c} (£{amt:.2f})")
-                total_money += amt
+        if not st.session_state.completed:
+            st.info("No chores completed yet — get cleaning! 🧽")
+        else:
+            df = pd.DataFrame(st.session_state.completed, columns=["Chore", "Amount", "Timestamp"])
+            df["Timestamp"] = pd.to_datetime(df["Timestamp"])
+            df["Date"] = df["Timestamp"].dt.date
 
-        st.markdown(f"**Total Earned (Base + Chores): £{total_money:.2f}**")
+            # Total money
+            total_money += df["Amount"].sum()
+            st.markdown(f"**Total Earned (Base + Chores): £{total_money:.2f}**")
+
+            # Weekly and monthly totals
+            one_week_ago = datetime.now() - timedelta(days=7)
+            weekly_df = df[df["Timestamp"] >= one_week_ago]
+            weekly_total = weekly_df["Amount"].sum()
+            st.write(f"**Last 7 Days:** £{weekly_total:.2f}")
+
+            one_month_ago = datetime.now() - timedelta(days=30)
+            monthly_df = df[df["Timestamp"] >= one_month_ago]
+            monthly_total = monthly_df["Amount"].sum()
+            st.write(f"**Last 30 Days:** £{monthly_total:.2f}")
+
+            # Line chart
+            daily_totals = df.groupby("Date")["Amount"].sum().reset_index()
+            st.line_chart(daily_totals.set_index("Date"))
+
+            # Recent chores
+            st.divider()
+            st.markdown("### 🧾 Recent Chores")
+            for i, row in df.sort_values("Timestamp", ascending=False).head(10).iterrows():
+                st.write(f"{row['Timestamp'].strftime('%Y-%m-%d %H:%M')} — {row['Chore']} (£{row['Amount']:.2f})")
+
+            # ---------------------------
+            # Achievements / Badges
+            # ---------------------------
+            st.divider()
+            st.subheader("🏅 Achievements")
+            total_chores_done = len(df)
+            badges = []
+
+            if total_chores_done >= 5:
+                badges.append("🥉 Bronze — 5 chores done")
+            if total_chores_done >= 10:
+                badges.append("🥈 Silver — 10 chores done")
+            if total_chores_done >= 25:
+                badges.append("🥇 Gold — 25 chores done")
+            if total_chores_done >= 50:
+                badges.append("🏆 Platinum — 50 chores done")
+
+            if badges:
+                for b in badges:
+                    st.write(b)
+            else:
+                st.info("Complete more chores to earn achievements!")
 
     # ---------------------------
     # ⚙️ Settings Tab
