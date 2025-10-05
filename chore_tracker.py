@@ -89,7 +89,7 @@ if st.session_state.user is None:
                 users[new_user] = {
                     "password": hash_password(new_pass),
                     "base_amount": base_amount,
-                    "theme": "#4CAF50",
+                    "theme": "#0D1B4C",
                     "avatar": None
                 }
                 ensure_user_folder(new_user)
@@ -105,7 +105,7 @@ else:
     st.title(f"🧹 {user}'s Chore Tracker")
 
     BASE_AMOUNT = users[user].get("base_amount", 1.70)
-    THEME_COLOR = users[user].get("theme", "#4CAF50")
+    THEME_COLOR = users[user].get("theme", "#0D1B4C")
     AVATAR_PATH = users[user].get("avatar")
 
     DATA_FILE = f"user_data/{user}/completed_chores.json"
@@ -199,7 +199,7 @@ else:
             st.success("Completed chores cleared!")
 
     # ---------------------------
-    # 📊 Summary Tab (with Achievements + Export)
+    # 📊 Summary Tab (without Excel)
     # ---------------------------
     with tab2:
         st.subheader("Earnings Summary")
@@ -213,7 +213,6 @@ else:
             df["Timestamp"] = pd.to_datetime(df["Timestamp"])
             df["Date"] = df["Timestamp"].dt.date
 
-            # Total money
             total_money += df["Amount"].sum()
             st.markdown(f"**Total Earned (Base + Chores): £{total_money:.2f}**")
 
@@ -258,29 +257,6 @@ else:
                     st.write(b)
             else:
                 st.info("Complete more chores to earn achievements!")
-
-            # Export to Excel (safe version)
-            st.divider()
-            st.subheader("💾 Export Chores to Excel")
-            export_file = f"user_data/{user}/chores_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-
-            # Prepare base pay row safely
-            base_row = pd.DataFrame([{
-                "Chore": "Base Pay",
-                "Amount": BASE_AMOUNT,
-                "Timestamp": pd.Timestamp.now(),
-                "Date": pd.Timestamp.now().date()
-            }])
-
-            # Ensure column order matches df
-            base_row = base_row[df.columns]
-
-            # Concatenate
-            df_export = pd.concat([base_row, df], ignore_index=True)
-
-            if st.button("Export to Excel"):
-                df_export.to_excel(export_file, index=False)
-                st.success(f"Exported to {export_file}")
 
     # ---------------------------
     # ⚙️ Settings Tab
