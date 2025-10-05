@@ -5,6 +5,7 @@ import os
 import hashlib
 from pathlib import Path
 import pandas as pd
+import math
 
 st.set_page_config(page_title="Chore Tracker", page_icon="🧹", layout="centered")
 
@@ -89,7 +90,7 @@ if st.session_state.user is None:
                 users[new_user] = {
                     "password": hash_password(new_pass),
                     "base_amount": base_amount,
-                    "theme": "#0D1B4C",
+                    "theme": "#0D1B4C",  # theme color
                     "avatar": None
                 }
                 ensure_user_folder(new_user)
@@ -199,30 +200,38 @@ else:
             st.success("Completed chores cleared!")
 
     # ---------------------------
-    # 📊 Summary Tab (without Excel)
+    # 📊 Summary Tab with Friday Base Pay
     # ---------------------------
     with tab2:
         st.subheader("Earnings Summary")
-        total_money = BASE_AMOUNT
-        st.markdown(f"**Starting Base: £{BASE_AMOUNT:.2f}**")
+        total_money = sum([amt for _, amt, _ in st.session_state.completed]) + BASE_AMOUNT
+        st.markdown(f"**Total Earned (Including Base Pay): £{total_money:.2f}**")
 
-        if not st.session_state.completed:
-            st.info("No chores completed yet — get cleaning! 🧽")
-        else:
+        # Determine level (base counts only on Fridays)
+        today = datetime.now()
+        base_for_level = BASE_AMOUNT if today.weekday() == 4 else 0  # Friday=4
+        total_for_level = sum([amt for _, amt, _ in st.session_state.completed]) + base_for_level
+        level = math.floor(total_for_level / 10) + 1
+        next_level_total = level * 10
+        progress = total_for_level / next_level_total
+        st.markdown(f"**Level:** {level}")
+        st.progress(min(progress, 1.0))
+
+        if today.weekday() != 4:
+            st.info(f"Next base pay of £{BASE_AMOUNT:.2f} will count toward level this Friday!")
+
+        # Weekly and monthly totals
+        if st.session_state.completed:
             df = pd.DataFrame(st.session_state.completed, columns=["Chore", "Amount", "Timestamp"])
             df["Timestamp"] = pd.to_datetime(df["Timestamp"])
             df["Date"] = df["Timestamp"].dt.date
 
-            total_money += df["Amount"].sum()
-            st.markdown(f"**Total Earned (Base + Chores): £{total_money:.2f}**")
-
-            # Weekly and monthly totals
-            one_week_ago = datetime.now() - timedelta(days=7)
+            one_week_ago = today - timedelta(days=7)
             weekly_df = df[df["Timestamp"] >= one_week_ago]
             weekly_total = weekly_df["Amount"].sum()
             st.write(f"**Last 7 Days:** £{weekly_total:.2f}")
 
-            one_month_ago = datetime.now() - timedelta(days=30)
+            one_month_ago = today - timedelta(days=30)
             monthly_df = df[df["Timestamp"] >= one_month_ago]
             monthly_total = monthly_df["Amount"].sum()
             st.write(f"**Last 30 Days:** £{monthly_total:.2f}")
