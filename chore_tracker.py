@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 import os
 
-st.title("🧹 Chore Tracker with Money 💷")
+st.title("Thomas' Chore Tracker")
 
 # Base starting amount
 BASE_AMOUNT = 2.00   # base salary in pounds
