@@ -2,5 +2,9 @@
     "CoolGuySaysHi": {
         "password": "4eaa20dcfb410a86e84b135daf91a6ab38028acee4ebb760e07ca1d9795e1607",
         "base_amount": 2.0
+    },
+    "Goebear": {
+        "password": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+        "base_amount": 1.4999999999999998
     }
 }

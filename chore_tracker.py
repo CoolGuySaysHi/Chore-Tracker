@@ -98,18 +98,13 @@ else:
     # ---------------------------
     # Main App for Logged-in User
     # ---------------------------
-    st.title(f"🧹 {st.session_state.user}'s Chore Tracker 💷")
-
     user = st.session_state.user
+    st.title(f"🧹 {user}'s Chore Tracker 💷")
+
     BASE_AMOUNT = users[user].get("base_amount", 1.70)
-
-    # File for this user's completed chores
     DATA_FILE = f"completed_chores_{user}.json"
-
-    # Shared file for available chores
     CHORES_FILE = "available_chores.json"
 
-    # Load chores
     chores = load_available_chores()
 
     if os.path.exists(DATA_FILE):
@@ -126,64 +121,108 @@ else:
         with open(CHORES_FILE, "w") as f:
             json.dump(chores, f, indent=4)
 
-    # Logout
-    if st.button("🚪 Log Out"):
-        st.session_state.user = None
-        st.rerun()
+    # Tabs for navigation
+    tab1, tab2, tab3 = st.tabs(["🏠 Chores", "🧾 Summary", "⚙️ Settings"])
 
-    # --- Available Chores ---
-    st.subheader("Available Chores")
-    for chore, amount in chores.items():
-        col1, col2 = st.columns([4,1])
-        with col1:
-            if st.button(f"✅ {chore} (£{amount:.2f})", key=f"do_{chore}"):
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                st.session_state.completed.append([chore, amount, timestamp])
-                save_completed()
-        with col2:
-            if st.button("❌", key=f"del_{chore}"):
-                del chores[chore]
-                save_chores()
-                st.rerun()
-
-    # --- Add new available chore ---
-    st.subheader("Add New Chore")
-    new_chore_name = st.text_input("Chore name")
-    new_chore_amount = st.number_input("Amount (£)", min_value=0.0, step=0.5)
-
-    if st.button("➕ Add to Available Chores"):
-        if new_chore_name and new_chore_amount > 0:
-            chores[new_chore_name] = new_chore_amount
-            save_chores()
-            st.success(f"Added '{new_chore_name}' (£{new_chore_amount:.2f}) to available chores!")
+    # ---------------------------
+    # 🏠 Chores Tab
+    # ---------------------------
+    with tab1:
+        if st.button("🚪 Log Out"):
+            st.session_state.user = None
             st.rerun()
 
-    # --- Custom One-off Entry ---
-    st.subheader("Custom One-off Entry")
-    custom_name = st.text_input("One-off chore/task name", key="oneoff")
-    custom_amount = st.number_input("One-off amount (£)", min_value=0.0, step=0.5, key="oneoff_amt")
+        st.subheader("Available Chores")
+        for chore, amount in chores.items():
+            col1, col2 = st.columns([4,1])
+            with col1:
+                if st.button(f"✅ {chore} (£{amount:.2f})", key=f"do_{chore}"):
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    st.session_state.completed.append([chore, amount, timestamp])
+                    save_completed()
+            with col2:
+                if st.button("❌", key=f"del_{chore}"):
+                    del chores[chore]
+                    save_chores()
+                    st.rerun()
 
-    if st.button("➕ Add One-off Entry"):
-        if custom_name and custom_amount > 0:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.session_state.completed.append([custom_name, custom_amount, timestamp])
+        # Add new chore
+        st.subheader("Add New Chore")
+        new_chore_name = st.text_input("Chore name")
+        new_chore_amount = st.number_input("Amount (£)", min_value=0.0, step=0.5)
+
+        if st.button("➕ Add to Available Chores"):
+            if new_chore_name and new_chore_amount > 0:
+                chores[new_chore_name] = new_chore_amount
+                save_chores()
+                st.success(f"Added '{new_chore_name}' (£{new_chore_amount:.2f}) to available chores!")
+                st.rerun()
+
+        # Custom one-off
+        st.subheader("Custom One-off Entry")
+        custom_name = st.text_input("One-off chore/task name", key="oneoff")
+        custom_amount = st.number_input("One-off amount (£)", min_value=0.0, step=0.5, key="oneoff_amt")
+
+        if st.button("➕ Add One-off Entry"):
+            if custom_name and custom_amount > 0:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                st.session_state.completed.append([custom_name, custom_amount, timestamp])
+                save_completed()
+                st.success(f"Added one-off: {custom_name} (£{custom_amount:.2f})")
+
+        # Reset completed
+        if st.button("🗑️ Clear Completed Chores"):
+            st.session_state.completed = []
             save_completed()
-            st.success(f"Added one-off: {custom_name} (£{custom_amount:.2f})")
+            st.success("Completed chores have been cleared!")
 
-    # --- Reset Completed ---
-    if st.button("🗑️ Clear Completed Chores"):
-        st.session_state.completed = []
-        save_completed()
-        st.success("Completed chores have been cleared!")
+    # ---------------------------
+    # 🧾 Summary Tab
+    # ---------------------------
+    with tab2:
+        st.subheader("Completed Chores Log")
+        total_money = BASE_AMOUNT
+        st.markdown(f"**Starting Base: £{BASE_AMOUNT:.2f}**")
 
-    # --- Completed Chores Log ---
-    st.subheader("Completed Chores Log")
-    total_money = BASE_AMOUNT
-    st.markdown(f"**Starting Base: £{BASE_AMOUNT:.2f}**")
+        if st.session_state.completed:
+            for c, amt, t in st.session_state.completed:
+                st.write(f"{t} - {c} (£{amt:.2f})")
+                total_money += amt
 
-    if st.session_state.completed:
-        for c, amt, t in st.session_state.completed:
-            st.write(f"{t} - {c} (£{amt:.2f})")
-            total_money += amt
+        st.markdown(f"**Total Earned (Base + Chores): £{total_money:.2f}**")
 
-    st.markdown(f"**Total Earned (Base + Chores): £{total_money:.2f}**")
+    # ---------------------------
+    # ⚙️ Settings Tab
+    # ---------------------------
+    with tab3:
+        st.subheader("User Settings")
+
+        st.markdown(f"**Logged in as:** {user}")
+        st.markdown(f"**Current Base Amount:** £{users[user].get('base_amount', 1.70):.2f}")
+
+        st.divider()
+
+        st.markdown("### 💷 Change Base Amount")
+        new_base = st.number_input("New Base Amount (£)", min_value=0.0, step=0.1)
+        if st.button("Update Base Amount"):
+            users[user]["base_amount"] = new_base
+            save_users(users)
+            st.success(f"Base amount updated to £{new_base:.2f}")
+            st.rerun()
+
+        st.divider()
+
+        st.markdown("### 🔑 Change Password")
+        old_pass = st.text_input("Current Password", type="password")
+        new_pass = st.text_input("New Password", type="password")
+        confirm_pass = st.text_input("Confirm New Password", type="password")
+
+        if st.button("Update Password"):
+            if not verify_password(users[user]["password"], old_pass):
+                st.error("Current password is incorrect.")
+            elif new_pass != confirm_pass:
+                st.error("New passwords do not match.")
+            else:
+                users[user]["password"] = hash_password(new_pass)
+                save_users(users)
+                st.success("Password updated successfully!")
