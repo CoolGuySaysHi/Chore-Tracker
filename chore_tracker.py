@@ -199,7 +199,7 @@ else:
             st.success("Completed chores cleared!")
 
     # ---------------------------
-    # 📊 Summary Tab (with Achievements)
+    # 📊 Summary Tab (with Achievements + Export)
     # ---------------------------
     with tab2:
         st.subheader("Earnings Summary")
@@ -238,9 +238,7 @@ else:
             for i, row in df.sort_values("Timestamp", ascending=False).head(10).iterrows():
                 st.write(f"{row['Timestamp'].strftime('%Y-%m-%d %H:%M')} — {row['Chore']} (£{row['Amount']:.2f})")
 
-            # ---------------------------
             # Achievements / Badges
-            # ---------------------------
             st.divider()
             st.subheader("🏅 Achievements")
             total_chores_done = len(df)
@@ -260,6 +258,25 @@ else:
                     st.write(b)
             else:
                 st.info("Complete more chores to earn achievements!")
+
+            # Export to Excel (fixed)
+            st.divider()
+            st.subheader("💾 Export Chores to Excel")
+            export_file = f"user_data/{user}/chores_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+            # Prepare a base pay row with correct columns
+            base_row = pd.DataFrame([{
+                "Chore": "Base Pay",
+                "Amount": BASE_AMOUNT,
+                "Timestamp": datetime.now(),
+                "Date": datetime.now().date()
+            }])
+
+            df_export = pd.concat([base_row, df], ignore_index=True)
+
+            if st.button("Export to Excel"):
+                df_export.to_excel(export_file, index=False)
+                st.success(f"Exported to {export_file}")
 
     # ---------------------------
     # ⚙️ Settings Tab
