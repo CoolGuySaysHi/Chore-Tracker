@@ -259,19 +259,23 @@ else:
             else:
                 st.info("Complete more chores to earn achievements!")
 
-            # Export to Excel (fixed)
+            # Export to Excel (safe version)
             st.divider()
             st.subheader("💾 Export Chores to Excel")
             export_file = f"user_data/{user}/chores_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-            # Prepare a base pay row with correct columns
+            # Prepare base pay row safely
             base_row = pd.DataFrame([{
                 "Chore": "Base Pay",
                 "Amount": BASE_AMOUNT,
-                "Timestamp": datetime.now(),
-                "Date": datetime.now().date()
+                "Timestamp": pd.Timestamp.now(),
+                "Date": pd.Timestamp.now().date()
             }])
 
+            # Ensure column order matches df
+            base_row = base_row[df.columns]
+
+            # Concatenate
             df_export = pd.concat([base_row, df], ignore_index=True)
 
             if st.button("Export to Excel"):
