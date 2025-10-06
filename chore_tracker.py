@@ -29,24 +29,30 @@ def save_users(users):
 def ensure_user_folder(user):
     os.makedirs(f"user_data/{user}", exist_ok=True)
 
-def load_available_chores():
-    path = "available_chores.json"
+# ---------------------------
+# User-specific chores
+# ---------------------------
+def load_available_chores(user):
+    path = f"user_data/{user}/available_chores.json"
     if os.path.exists(path):
         with open(path, "r") as f:
             return json.load(f)
+    # Default chores for new users
     default = {
         "Take out the trash": 2.0,
         "Wash the dishes": 3.0,
         "Do the laundry": 5.0,
         "Vacuum the floor": 4.0
     }
+    os.makedirs(f"user_data/{user}", exist_ok=True)
     with open(path, "w") as f:
         json.dump(default, f, indent=4)
     return default
 
-def save_available_chores(chores):
-    with open("available_chores.json", "w") as f:
-        json.dump(chores, f, indent=4)
+def save_available_chores(user, data):
+    os.makedirs(f"user_data/{user}", exist_ok=True)
+    with open(f"user_data/{user}/available_chores.json", "w") as f:
+        json.dump(data, f, indent=4)
 
 # ---------------------------
 # Session setup
@@ -95,6 +101,8 @@ if st.session_state.user is None:
                     "level": 1
                 }
                 ensure_user_folder(new_user)
+                # Create default chores for this user
+                load_available_chores(new_user)
                 save_users(users)
                 st.success(f"Account created with base pay £{base_amount:.2f}! Log in to continue.")
 
@@ -109,7 +117,7 @@ else:
     BASE_AMOUNT = users[user].get("base_amount", 1.70)
     AVATAR_PATH = users[user].get("avatar")
     DATA_FILE = f"user_data/{user}/completed_chores.json"
-    chores = load_available_chores()
+    chores = load_available_chores(user)
 
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
@@ -157,7 +165,7 @@ else:
             with col2:
                 if st.button("❌", key=f"del_{chore}"):
                     del chores[chore]
-                    save_available_chores(chores)
+                    save_available_chores(user, chores)
                     st.rerun()
 
         st.subheader("Add New Chore")
@@ -166,7 +174,7 @@ else:
         if st.button("➕ Add Chore"):
             if new_name and new_amount > 0:
                 chores[new_name] = new_amount
-                save_available_chores(chores)
+                save_available_chores(user, chores)
                 st.success(f"Added '{new_name}' (£{new_amount:.2f})!")
                 st.rerun()
 
@@ -186,7 +194,7 @@ else:
             st.success("Completed chores cleared!")
 
     # ---------------------------
-    # Summary Tab (with fixed progress)
+    # Summary Tab (fixed progress)
     # ---------------------------
     with tab2:
         st.subheader("Earnings Summary")
@@ -194,14 +202,11 @@ else:
         st.markdown(f"**Total Earned (Including Base Pay): £{total_money:.2f}**")
 
         today = datetime.now()
-        # Only add base to level progress on Fridays
         base_for_level = BASE_AMOUNT if today.weekday() == 4 else 0
         total_for_level = sum([amt for _, amt, _ in st.session_state.completed]) + base_for_level
 
-        # Level calculation
         level = math.floor(total_for_level / 10) + 1
         prev_threshold = (level - 1) * 10
-        # Correct progress within current level
         progress_amount = total_for_level - prev_threshold
         progress = max(min(progress_amount / 10, 1.0), 0.0)
 
