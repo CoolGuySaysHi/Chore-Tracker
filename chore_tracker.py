@@ -1,18 +1,15 @@
 import streamlit as st
+import json, os, hashlib
 from datetime import datetime, timedelta
-import json
-import os
-import hashlib
-from pathlib import Path
 import pandas as pd
 import math
 
 st.set_page_config(page_title="Chore Tracker", page_icon="🧹", layout="centered")
+THEME_COLOR = "#0D1B4C"
 
 # ---------------------------
 # Utility Functions
 # ---------------------------
-
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -29,9 +26,13 @@ def save_users(users):
     with open("users.json", "w") as f:
         json.dump(users, f, indent=4)
 
+def ensure_user_folder(user):
+    os.makedirs(f"user_data/{user}", exist_ok=True)
+
 def load_available_chores():
-    if os.path.exists("available_chores.json"):
-        with open("available_chores.json", "r") as f:
+    path = "available_chores.json"
+    if os.path.exists(path):
+        with open(path, "r") as f:
             return json.load(f)
     default = {
         "Take out the trash": 2.0,
@@ -39,31 +40,31 @@ def load_available_chores():
         "Do the laundry": 5.0,
         "Vacuum the floor": 4.0
     }
-    with open("available_chores.json", "w") as f:
+    with open(path, "w") as f:
         json.dump(default, f, indent=4)
     return default
 
-def ensure_user_folder(user):
-    Path(f"user_data/{user}").mkdir(parents=True, exist_ok=True)
+def save_available_chores(chores):
+    with open("available_chores.json", "w") as f:
+        json.dump(chores, f, indent=4)
 
 # ---------------------------
-# Login & Account Handling
+# Session setup
 # ---------------------------
-
 users = load_users()
-
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# ---------------------------
+# Login / Signup
+# ---------------------------
 if st.session_state.user is None:
     st.title("🔐 Login to Chore Tracker")
-
     tab1, tab2 = st.tabs(["Login", "Create Account"])
-
+    
     with tab1:
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-
         if st.button("Login"):
             if username in users and verify_password(users[username]["password"], password):
                 st.session_state.user = username
@@ -78,42 +79,36 @@ if st.session_state.user is None:
         new_pass = st.text_input("New Password", type="password")
         confirm_pass = st.text_input("Confirm Password", type="password")
         base_amount = st.number_input("Base Amount (£)", min_value=0.0, step=0.1, value=1.70)
-
         if st.button("Create Account"):
             if not new_user or not new_pass:
-                st.warning("Please enter a username and password.")
+                st.warning("Enter a username and password.")
             elif new_user in users:
-                st.error("That username already exists.")
+                st.error("Username already exists.")
             elif new_pass != confirm_pass:
-                st.error("Passwords don’t match.")
+                st.error("Passwords do not match.")
             else:
                 users[new_user] = {
                     "password": hash_password(new_pass),
                     "base_amount": base_amount,
-                    "theme": "#0D1B4C",
+                    "theme": THEME_COLOR,
                     "avatar": None,
-                    "level": 1  # initialize level
+                    "level": 1
                 }
                 ensure_user_folder(new_user)
                 save_users(users)
-                st.success(f"Account created with base pay of £{base_amount:.2f}! You can now log in.")
+                st.success(f"Account created with base pay £{base_amount:.2f}! Log in to continue.")
 
+# ---------------------------
+# Main App
+# ---------------------------
 else:
-    # ---------------------------
-    # Main App for Logged-in User
-    # ---------------------------
     user = st.session_state.user
     ensure_user_folder(user)
     st.title(f"🧹 {user}'s Chore Tracker")
 
     BASE_AMOUNT = users[user].get("base_amount", 1.70)
-    THEME_COLOR = users[user].get("theme", "#0D1B4C")
     AVATAR_PATH = users[user].get("avatar")
-    saved_level = users[user].get("level", 1)
-
     DATA_FILE = f"user_data/{user}/completed_chores.json"
-    CHORES_FILE = "available_chores.json"
-
     chores = load_available_chores()
 
     if os.path.exists(DATA_FILE):
@@ -126,31 +121,22 @@ else:
         with open(DATA_FILE, "w") as f:
             json.dump(st.session_state.completed, f, indent=4)
 
-    def save_chores():
-        with open(CHORES_FILE, "w") as f:
-            json.dump(chores, f, indent=4)
-
-    st.markdown(
-        f"""
-        <style>
-        .stButton>button {{
-            background-color: {THEME_COLOR};
-            color: white;
-            border-radius: 8px;
-            border: none;
-        }}
-        .stButton>button:hover {{
-            opacity: 0.9;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"""
+    <style>
+    .stButton>button {{
+        background-color: {THEME_COLOR};
+        color: white;
+        border-radius: 8px;
+        border: none;
+    }}
+    .stButton>button:hover {{ opacity:0.9; }}
+    </style>
+    """, unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["🏠 Chores", "📊 Summary", "⚙️ Settings"])
 
     # ---------------------------
-    # 🏠 Chores Tab
+    # Chores Tab
     # ---------------------------
     with tab1:
         if st.button("🚪 Log Out"):
@@ -162,7 +148,7 @@ else:
 
         st.subheader("Available Chores")
         for chore, amount in chores.items():
-            col1, col2 = st.columns([4, 1])
+            col1, col2 = st.columns([4,1])
             with col1:
                 if st.button(f"✅ {chore} (£{amount:.2f})", key=f"do_{chore}"):
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -171,25 +157,23 @@ else:
             with col2:
                 if st.button("❌", key=f"del_{chore}"):
                     del chores[chore]
-                    save_chores()
+                    save_available_chores(chores)
                     st.rerun()
 
         st.subheader("Add New Chore")
-        new_chore_name = st.text_input("Chore name")
-        new_chore_amount = st.number_input("Amount (£)", min_value=0.0, step=0.5)
-
-        if st.button("➕ Add to Available Chores"):
-            if new_chore_name and new_chore_amount > 0:
-                chores[new_chore_name] = new_chore_amount
-                save_chores()
-                st.success(f"Added '{new_chore_name}' (£{new_chore_amount:.2f})!")
+        new_name = st.text_input("Chore name")
+        new_amount = st.number_input("Amount (£)", min_value=0.0, step=0.5)
+        if st.button("➕ Add Chore"):
+            if new_name and new_amount > 0:
+                chores[new_name] = new_amount
+                save_available_chores(chores)
+                st.success(f"Added '{new_name}' (£{new_amount:.2f})!")
                 st.rerun()
 
         st.subheader("Custom One-off Entry")
-        custom_name = st.text_input("One-off chore/task name", key="oneoff")
+        custom_name = st.text_input("One-off task name", key="oneoff")
         custom_amount = st.number_input("One-off amount (£)", min_value=0.0, step=0.5, key="oneoff_amt")
-
-        if st.button("➕ Add One-off Entry"):
+        if st.button("➕ Add One-off"):
             if custom_name and custom_amount > 0:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 st.session_state.completed.append([custom_name, custom_amount, timestamp])
@@ -202,7 +186,7 @@ else:
             st.success("Completed chores cleared!")
 
     # ---------------------------
-    # 📊 Summary Tab with Level Save
+    # Summary Tab
     # ---------------------------
     with tab2:
         st.subheader("Earnings Summary")
@@ -210,103 +194,83 @@ else:
         st.markdown(f"**Total Earned (Including Base Pay): £{total_money:.2f}**")
 
         today = datetime.now()
-        base_for_level = BASE_AMOUNT if today.weekday() == 4 else 0  # Friday only
+        base_for_level = BASE_AMOUNT if today.weekday()==4 else 0
         total_for_level = sum([amt for _, amt, _ in st.session_state.completed]) + base_for_level
         level = math.floor(total_for_level / 10) + 1
-        next_level_total = level * 10
-        progress = total_for_level / next_level_total
+        prev_threshold = (level - 1) * 10
+        progress = (total_for_level - prev_threshold) / 10
         st.markdown(f"**Level:** {level}")
         st.progress(min(progress, 1.0))
 
-        # Save level if changed
-        if users[user].get("level", 1) != level:
+        if users[user].get("level",1) != level:
             users[user]["level"] = level
             save_users(users)
 
         if today.weekday() != 4:
-            st.info(f"Next base pay of £{BASE_AMOUNT:.2f} will count toward level this Friday!")
+            st.info(f"Next base pay of £{BASE_AMOUNT:.2f} counts toward level this Friday!")
 
-        # Weekly and monthly totals
         if st.session_state.completed:
-            df = pd.DataFrame(st.session_state.completed, columns=["Chore", "Amount", "Timestamp"])
+            df = pd.DataFrame(st.session_state.completed, columns=["Chore","Amount","Timestamp"])
             df["Timestamp"] = pd.to_datetime(df["Timestamp"])
             df["Date"] = df["Timestamp"].dt.date
 
-            one_week_ago = today - timedelta(days=7)
-            weekly_df = df[df["Timestamp"] >= one_week_ago]
-            weekly_total = weekly_df["Amount"].sum()
-            st.write(f"**Last 7 Days:** £{weekly_total:.2f}")
-
-            one_month_ago = today - timedelta(days=30)
-            monthly_df = df[df["Timestamp"] >= one_month_ago]
-            monthly_total = monthly_df["Amount"].sum()
-            st.write(f"**Last 30 Days:** £{monthly_total:.2f}")
+            st.write(f"**Last 7 Days:** £{df[df['Timestamp']>=today-timedelta(days=7)]['Amount'].sum():.2f}")
+            st.write(f"**Last 30 Days:** £{df[df['Timestamp']>=today-timedelta(days=30)]['Amount'].sum():.2f}")
 
             daily_totals = df.groupby("Date")["Amount"].sum().reset_index()
             st.line_chart(daily_totals.set_index("Date"))
 
             st.divider()
-            st.markdown("### 🧾 Recent Chores")
-            for i, row in df.sort_values("Timestamp", ascending=False).head(10).iterrows():
+            st.subheader("🧾 Recent Chores")
+            for _, row in df.sort_values("Timestamp", ascending=False).head(10).iterrows():
                 st.write(f"{row['Timestamp'].strftime('%Y-%m-%d %H:%M')} — {row['Chore']} (£{row['Amount']:.2f})")
 
             st.divider()
             st.subheader("🏅 Achievements")
-            total_chores_done = len(df)
+            total_done = len(df)
             badges = []
-            if total_chores_done >= 5: badges.append("🥉 Bronze — 5 chores done")
-            if total_chores_done >= 10: badges.append("🥈 Silver — 10 chores done")
-            if total_chores_done >= 25: badges.append("🥇 Gold — 25 chores done")
-            if total_chores_done >= 50: badges.append("🏆 Platinum — 50 chores done")
+            if total_done>=5: badges.append("🥉 Bronze — 5 chores done")
+            if total_done>=10: badges.append("🥈 Silver — 10 chores done")
+            if total_done>=25: badges.append("🥇 Gold — 25 chores done")
+            if total_done>=50: badges.append("🏆 Platinum — 50 chores done")
             if badges:
                 for b in badges: st.write(b)
             else:
                 st.info("Complete more chores to earn achievements!")
 
     # ---------------------------
-    # ⚙️ Settings Tab
+    # Settings Tab
     # ---------------------------
     with tab3:
         st.subheader("User Settings")
-
         if AVATAR_PATH and os.path.exists(AVATAR_PATH):
-            st.image(AVATAR_PATH, width=120)
-        uploaded_avatar = st.file_uploader("Upload new profile picture", type=["png", "jpg", "jpeg"])
-        if uploaded_avatar:
-            avatar_path = f"user_data/{user}/avatar_{uploaded_avatar.name}"
-            with open(avatar_path, "wb") as f:
-                f.write(uploaded_avatar.getbuffer())
-            users[user]["avatar"] = avatar_path
+            st.image(AVATAR_PATH,width=120)
+        uploaded = st.file_uploader("Upload avatar", type=["png","jpg","jpeg"])
+        if uploaded:
+            path = f"user_data/{user}/avatar_{uploaded.name}"
+            with open(path,"wb") as f: f.write(uploaded.getbuffer())
+            users[user]["avatar"]=path
             save_users(users)
-            st.success("Profile picture updated!")
-            st.rerun()
+            st.success("Avatar updated!"); st.rerun()
 
         st.markdown("### 🎨 Theme Color")
         new_theme = st.color_picker("Pick your color", value=THEME_COLOR)
         if st.button("Update Theme Color"):
-            users[user]["theme"] = new_theme
-            save_users(users)
-            st.success(f"Theme color updated to {new_theme}")
-            st.rerun()
+            users[user]["theme"]=new_theme; save_users(users); st.success(f"Theme updated to {new_theme}"); st.rerun()
 
         st.markdown("### 💷 Base Amount")
         new_base = st.number_input("Change Base (£)", min_value=0.0, step=0.1, value=BASE_AMOUNT)
         if st.button("Update Base Amount"):
-            users[user]["base_amount"] = new_base
-            save_users(users)
-            st.success(f"Base updated to £{new_base:.2f}")
-            st.rerun()
+            users[user]["base_amount"]=new_base; save_users(users); st.success(f"Base updated to £{new_base:.2f}"); st.rerun()
 
         st.markdown("### 🔑 Change Password")
         old_pass = st.text_input("Current Password", type="password")
         new_pass = st.text_input("New Password", type="password")
-        confirm_pass = st.text_input("Confirm New Password", type="password")
+        confirm_pass = st.text_input("Confirm Password", type="password")
         if st.button("Update Password"):
             if not verify_password(users[user]["password"], old_pass):
                 st.error("Incorrect current password.")
             elif new_pass != confirm_pass:
                 st.error("Passwords do not match.")
             else:
-                users[user]["password"] = hash_password(new_pass)
-                save_users(users)
-                st.success("Password updated successfully!")
+                users[user]["password"]=hash_password(new_pass); save_users(users); st.success("Password updated!")
