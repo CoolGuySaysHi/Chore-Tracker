@@ -1,8 +1,6 @@
 {
-    "Empty Recycle Bins": 0.40,
-    "Pairing Socks": 0.40,
-    "Washing Car": 2.0,
-    "Job in the Garden": 1.0,
-    "Empty Dishwasher":0.40
-
+    "Take out the trash": 2.0,
+    "Wash the dishes": 3.0,
+    "Do the laundry": 5.0,
+    "Vacuum the floor": 4.0
 }
