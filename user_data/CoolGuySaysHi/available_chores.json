@@ -1,6 +1,7 @@
 {
-    "Take out the trash": 2.0,
-    "Wash the dishes": 3.0,
-    "Do the laundry": 5.0,
-    "Vacuum the floor": 4.0
+    "Empty recycle bins": 0.4,
+    "Empty dishwasher": 0.4,
+    "Wash car": 2.0,
+    "Job in the garden": 1.0,
+    "Pairing socks": 0.4
 }
