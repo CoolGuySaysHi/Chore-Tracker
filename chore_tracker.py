@@ -186,7 +186,7 @@ else:
             st.success("Completed chores cleared!")
 
     # ---------------------------
-    # Summary Tab
+    # Summary Tab (with fixed progress)
     # ---------------------------
     with tab2:
         st.subheader("Earnings Summary")
@@ -194,15 +194,21 @@ else:
         st.markdown(f"**Total Earned (Including Base Pay): £{total_money:.2f}**")
 
         today = datetime.now()
-        base_for_level = BASE_AMOUNT if today.weekday()==4 else 0
+        # Only add base to level progress on Fridays
+        base_for_level = BASE_AMOUNT if today.weekday() == 4 else 0
         total_for_level = sum([amt for _, amt, _ in st.session_state.completed]) + base_for_level
+
+        # Level calculation
         level = math.floor(total_for_level / 10) + 1
         prev_threshold = (level - 1) * 10
-        progress = (total_for_level - prev_threshold) / 10
-        st.markdown(f"**Level:** {level}")
-        st.progress(min(progress, 1.0))
+        # Correct progress within current level
+        progress_amount = total_for_level - prev_threshold
+        progress = max(min(progress_amount / 10, 1.0), 0.0)
 
-        if users[user].get("level",1) != level:
+        st.markdown(f"**Level:** {level}")
+        st.progress(progress)
+
+        if users[user].get("level", 1) != level:
             users[user]["level"] = level
             save_users(users)
 
@@ -266,7 +272,7 @@ else:
         st.markdown("### 🔑 Change Password")
         old_pass = st.text_input("Current Password", type="password")
         new_pass = st.text_input("New Password", type="password")
-        confirm_pass = st.text_input("Confirm Password", type="password")
+        confirm_pass = st.text_input("Confirm New Password", type="password")
         if st.button("Update Password"):
             if not verify_password(users[user]["password"], old_pass):
                 st.error("Incorrect current password.")
