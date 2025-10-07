@@ -1,318 +1,286 @@
 import streamlit as st
-import json, os, hashlib
-from datetime import datetime, timedelta
-import pandas as pd
-import math
-
-st.set_page_config(page_title="Chore Tracker", page_icon="🧹", layout="centered")
-THEME_COLOR = "#0D1B4C"
+import json, os
+from datetime import datetime
+import hashlib
 
 # ---------------------------
-# Utility Functions
+# File paths
 # ---------------------------
+USER_FILE = "users.json"
+COMPLETED_FILE = "completed.json"
+
+# ---------------------------
+# Helpers
+# ---------------------------
+def load_json(file):
+    if os.path.exists(file):
+        with open(file, "r") as f:
+            try:
+                return json.load(f)
+            except:
+                return {}
+    return {}
+
+def save_json(file, data):
+    with open(file, "w") as f:
+        json.dump(data, f, indent=4)
+
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-def verify_password(stored_hash, password_attempt):
-    return stored_hash == hash_password(password_attempt)
-
-def load_users():
-    if os.path.exists("users.json"):
-        with open("users.json", "r") as f:
-            return json.load(f)
-    return {}
-
-def save_users(users):
-    with open("users.json", "w") as f:
-        json.dump(users, f, indent=4)
-
-def ensure_user_folder(user):
-    os.makedirs(f"user_data/{user}", exist_ok=True)
+def verify_password(stored, provided):
+    return stored == hash_password(provided)
 
 # ---------------------------
-# User-specific chores
+# Load/save data
 # ---------------------------
-def load_available_chores(user):
-    path = f"user_data/{user}/available_chores.json"
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-    default = {
-        "Take out the trash": 2.0,
-        "Wash the dishes": 3.0,
-        "Do the laundry": 5.0,
-        "Vacuum the floor": 4.0
-    }
-    os.makedirs(f"user_data/{user}", exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(default, f, indent=4)
-    return default
+users = load_json(USER_FILE)
+completed_data = load_json(COMPLETED_FILE)
 
-def save_available_chores(user, data):
-    os.makedirs(f"user_data/{user}", exist_ok=True)
-    with open(f"user_data/{user}/available_chores.json", "w") as f:
-        json.dump(data, f, indent=4)
+def save_users(data):
+    save_json(USER_FILE, data)
+
+def save_completed():
+    save_json(COMPLETED_FILE, completed_data)
 
 # ---------------------------
-# Session setup
+# Weekly Summary + Sunday Reset
 # ---------------------------
-users = load_users()
+def auto_clear_and_bonus(user):
+    today = datetime.now().strftime("%A")
+    if today == "Sunday":
+        user_data = users[user]
+        last_bonus = user_data.get("last_bonus_date")
+        today_str = datetime.now().strftime("%Y-%m-%d")
+
+        if last_bonus != today_str:
+            # Calculate weekly totals before reset
+            week_total = sum(amt for _, amt, _ in st.session_state.completed)
+            chores_done = len(st.session_state.completed)
+            level_before = user_data.get("level_progress", 0)
+
+            # Weekly summary popup
+            st.info(f"🧾 **Weekly Summary:**\n\n"
+                    f"- Total Earned This Week: £{week_total:.2f}\n"
+                    f"- Chores Completed: {chores_done}\n"
+                    f"- Level Progress Before Bonus: £{level_before:.2f}")
+
+            # Add base pay bonus
+            user_data["level_progress"] += user_data.get("base_amount", 0)
+            user_data["last_bonus_date"] = today_str
+            save_users(users)
+
+            # Clear current chores
+            st.session_state.completed = []
+            save_completed()
+
+            st.session_state["last_clear_date"] = today_str
+            st.success("🎉 Weekly reset complete! Base amount added to your level and chores cleared.")
+
+# ---------------------------
+# App UI
+# ---------------------------
+st.set_page_config(page_title="Chore Tracker", page_icon="🧹", layout="centered")
+st.title("🧹 Family Chore Tracker")
+
 if "user" not in st.session_state:
     st.session_state.user = None
 
 # ---------------------------
-# Login / Signup
+# Login / Sign Up
 # ---------------------------
 if st.session_state.user is None:
-    st.title("🔐 Login to Chore Tracker")
-    tab1, tab2 = st.tabs(["Login", "Create Account"])
-    
-    with tab1:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+    st.sidebar.header("Login / Create Account")
+    choice = st.sidebar.radio("Choose Action:", ["Login", "Create Account"])
+
+    if choice == "Login":
+        user = st.text_input("Username")
+        pw = st.text_input("Password", type="password")
         if st.button("Login"):
-            if username in users and verify_password(users[username]["password"], password):
-                st.session_state.user = username
-                ensure_user_folder(username)
-                st.success(f"Welcome back, {username}!")
+            if user in users and verify_password(users[user]["password"], pw):
+                st.session_state.user = user
                 st.rerun()
             else:
                 st.error("Invalid username or password.")
 
-    with tab2:
-        new_user = st.text_input("New Username")
-        new_pass = st.text_input("New Password", type="password")
-        confirm_pass = st.text_input("Confirm Password", type="password")
-        base_amount = st.number_input("Base Amount (£)", min_value=0.0, step=0.1, value=1.70)
+    else:
+        new_user = st.text_input("Choose Username")
+        new_pw = st.text_input("Choose Password", type="password")
+        base_amt = st.number_input("Base Weekly Bonus (£)", min_value=0.0, step=0.1, value=1.7)
         if st.button("Create Account"):
-            if not new_user or not new_pass:
-                st.warning("Enter a username and password.")
-            elif new_user in users:
-                st.error("Username already exists.")
-            elif new_pass != confirm_pass:
-                st.error("Passwords do not match.")
+            if new_user in users:
+                st.error("That username already exists.")
             else:
                 users[new_user] = {
-                    "password": hash_password(new_pass),
-                    "base_amount": base_amount,
-                    "theme": THEME_COLOR,
-                    "avatar": None,
-                    "level": 1
+                    "password": hash_password(new_pw),
+                    "chores": [],
+                    "base_amount": base_amt,
+                    "total_earned": 0,
+                    "level_progress": 0,
+                    "level": 1,
+                    "theme": "#0D1B4C",
+                    "avatar": "",
+                    "last_bonus_date": "",
                 }
-                ensure_user_folder(new_user)
-                load_available_chores(new_user)
-                # Initialize history file
-                history_file = f"user_data/{new_user}/completed_history.json"
-                if not os.path.exists(history_file):
-                    with open(history_file, "w") as f:
-                        json.dump([], f)
                 save_users(users)
-                st.success(f"Account created with base pay £{base_amount:.2f}! Log in to continue.")
+                completed_data[new_user] = {"completed": [], "history": []}
+                save_completed()
+                st.success("Account created! Please log in.")
 
 # ---------------------------
-# Main App
+# Main App for Logged-in User
 # ---------------------------
-else:
+if st.session_state.user:
     user = st.session_state.user
-    ensure_user_folder(user)
-    st.title(f"🧹 {user}'s Chore Tracker")
+    st.sidebar.success(f"Logged in as {user}")
 
-    BASE_AMOUNT = users[user].get("base_amount", 1.70)
-    AVATAR_PATH = users[user].get("avatar")
-    DATA_FILE = f"user_data/{user}/completed_chores.json"         # Current UI list
-    HISTORY_FILE = f"user_data/{user}/completed_history.json"    # Permanent record
-    chores = load_available_chores(user)
+    user_data = users[user]
+    st.markdown(f"<h3 style='color:{user_data['theme']}'>Welcome back, {user}!</h3>", unsafe_allow_html=True)
 
-    # Load current session completed
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            st.session_state.completed = json.load(f)
-    else:
-        st.session_state.completed = []
+    # Initialize session data
+    if user not in completed_data:
+        completed_data[user] = {"completed": [], "history": []}
+        save_completed()
 
-    # Load history
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "r") as f:
-            st.session_state.completed_history = json.load(f)
-    else:
-        st.session_state.completed_history = []
+    if "completed" not in st.session_state:
+        st.session_state.completed = completed_data[user]["completed"]
 
-    def save_completed():
-        with open(DATA_FILE, "w") as f:
-            json.dump(st.session_state.completed, f, indent=4)
+    # Sunday reset + bonus
+    auto_clear_and_bonus(user)
 
-    def save_completed_history():
-        with open(HISTORY_FILE, "w") as f:
-            json.dump(st.session_state.completed_history, f, indent=4)
-
-    st.markdown(f"""
-    <style>
-    .stButton>button {{
-        background-color: {THEME_COLOR};
-        color: white;
-        border-radius: 8px;
-        border: none;
-    }}
-    .stButton>button:hover {{ opacity:0.9; }}
-    </style>
-    """, unsafe_allow_html=True)
-
-    tab1, tab2, tab3 = st.tabs(["🏠 Chores", "📊 Summary", "⚙️ Settings"])
+    # Tabs
+    tab1, tab2, tab3 = st.tabs(["🧾 Chores", "🏆 Progress", "⚙️ Settings"])
 
     # ---------------------------
-    # Chores Tab
+    # CHORES TAB
     # ---------------------------
     with tab1:
-        if st.button("🚪 Log Out"):
-            st.session_state.user = None
-            st.rerun()
+        st.subheader("Your Chores")
 
-        if AVATAR_PATH and os.path.exists(AVATAR_PATH):
-            st.image(AVATAR_PATH, width=100)
+        chores = user_data.get("chores", [])
+        if "new_chore" not in st.session_state:
+            st.session_state.new_chore = ""
 
-        st.subheader("Available Chores")
-        for chore, amount in chores.items():
-            col1, col2 = st.columns([4,1])
-            with col1:
-                if st.button(f"✅ {chore} (£{amount:.2f})", key=f"do_{chore}"):
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    st.session_state.completed.append([chore, amount, timestamp])
-                    st.session_state.completed_history.append([chore, amount, timestamp])
-                    save_completed()
-                    save_completed_history()
-            with col2:
-                if st.button("❌", key=f"del_{chore}"):
-                    del chores[chore]
-                    save_available_chores(user, chores)
-                    st.rerun()
-
-        st.subheader("Add New Chore")
-        new_name = st.text_input("Chore name")
-        new_amount = st.number_input("Amount (£)", min_value=0.0, step=0.5)
-        if st.button("➕ Add Chore"):
-            if new_name and new_amount > 0:
-                chores[new_name] = new_amount
-                save_available_chores(user, chores)
-                st.success(f"Added '{new_name}' (£{new_amount:.2f})!")
+        new_chore = st.text_input("Add a new chore:")
+        amount = st.number_input("Reward (£)", min_value=0.0, step=0.1)
+        if st.button("Add Chore"):
+            if new_chore:
+                chores.append({"name": new_chore, "amount": amount})
+                users[user]["chores"] = chores
+                save_users(users)
+                st.success(f"Added chore '{new_chore}' (£{amount:.2f})")
                 st.rerun()
 
-        st.subheader("Custom One-off Entry")
-        custom_name = st.text_input("One-off task name", key="oneoff")
-        custom_amount = st.number_input("One-off amount (£)", min_value=0.0, step=0.5, key="oneoff_amt")
-        if st.button("➕ Add One-off"):
-            if custom_name and custom_amount > 0:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                st.session_state.completed.append([custom_name, custom_amount, timestamp])
-                st.session_state.completed_history.append([custom_name, custom_amount, timestamp])
-                save_completed()
-                save_completed_history()
-                st.success(f"Added one-off: {custom_name} (£{custom_amount:.2f})")
+        if chores:
+            st.write("### Available Chores")
+            for chore in chores:
+                if st.button(f"✅ Complete: {chore['name']} (£{chore['amount']:.2f})", key=chore["name"]):
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    st.session_state.completed.append([chore["name"], chore["amount"], timestamp])
+                    completed_data[user]["completed"] = st.session_state.completed
+                    completed_data[user]["history"].append([chore["name"], chore["amount"], timestamp])
 
-        # Current vs All-Time boxes
-        st.subheader("📋 Current Completed Chores")
+                    users[user]["total_earned"] += chore["amount"]
+                    users[user]["level_progress"] += chore["amount"]
+                    save_users(users)
+                    save_completed()
+                    st.success(f"Chore '{chore['name']}' completed!")
+
+        else:
+            st.info("No chores yet! Add some above.")
+
+        st.write("---")
+        st.markdown("### ⚡ One-Off Chores")
+        temp_chore = st.text_input("One-off Chore")
+        temp_amount = st.number_input("One-off Reward (£)", min_value=0.0, step=0.1)
+        if st.button("Complete One-off Chore"):
+            if temp_chore:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                st.session_state.completed.append([temp_chore, temp_amount, timestamp])
+                completed_data[user]["completed"] = st.session_state.completed
+                completed_data[user]["history"].append([temp_chore, temp_amount, timestamp])
+                users[user]["total_earned"] += temp_amount
+                users[user]["level_progress"] += temp_amount
+                save_users(users)
+                save_completed()
+                st.success(f"One-off chore '{temp_chore}' completed!")
+
+        st.write("---")
+        st.markdown("### 🧹 Current Completed Chores")
         if st.session_state.completed:
             for chore, amt, ts in st.session_state.completed:
                 st.write(f"{ts} — {chore} (£{amt:.2f})")
         else:
-            st.info("No chores completed in the current session.")
+            st.info("No chores completed this week.")
 
         if st.button("🗑️ Clear Current Completed Chores"):
             st.session_state.completed = []
+            completed_data[user]["completed"] = []
             save_completed()
-            st.success("Current chores cleared from UI! All-time history is preserved.")
+            st.success("Cleared current completed chores!")
 
-        st.subheader("📜 All-Time Completed Chores")
-        if st.session_state.completed_history:
-            for chore, amt, ts in st.session_state.completed_history:
+        st.write("---")
+        st.markdown("### 🏅 All-Time Completed Chores")
+        if completed_data[user]["history"]:
+            for chore, amt, ts in completed_data[user]["history"]:
                 st.write(f"{ts} — {chore} (£{amt:.2f})")
         else:
-            st.info("No historical chores recorded yet.")
+            st.info("No historical chores yet.")
 
     # ---------------------------
-    # Summary Tab
+    # PROGRESS TAB
     # ---------------------------
     with tab2:
-        st.subheader("Earnings Summary")
-        today = datetime.now()
-        base_for_level = BASE_AMOUNT if today.weekday() == 4 else 0
-        total_for_level = sum([amt for _, amt, _ in st.session_state.completed_history]) + base_for_level
-        total_money = total_for_level
+        st.subheader("Your Progress")
+        lvl = user_data.get("level", 1)
+        prog = user_data.get("level_progress", 0)
+        total = user_data.get("total_earned", 0)
+        st.write(f"**Level:** {lvl}")
+        st.write(f"**Total Earned:** £{total:.2f}")
+        st.progress(min(prog % 10 / 10, 1.0))
 
-        st.markdown(f"**Total Earned (Including Base Pay): £{total_money:.2f}**")
-
-        # Level
-        level = math.floor(total_for_level / 10) + 1
-        prev_threshold = (level - 1) * 10
-        progress_amount = total_for_level - prev_threshold
-        progress = max(min(progress_amount / 10, 1.0), 0.0)
-        st.markdown(f"**Level:** {level}")
-        st.progress(progress)
-
-        if users[user].get("level", 1) != level:
-            users[user]["level"] = level
+        if prog >= lvl * 10:
+            users[user]["level"] += 1
+            users[user]["level_progress"] = 0
             save_users(users)
-
-        if today.weekday() != 4:
-            st.info(f"Next base pay of £{BASE_AMOUNT:.2f} counts toward level this Friday!")
-
-        # Graphs & achievements
-        if st.session_state.completed_history:
-            df = pd.DataFrame(st.session_state.completed_history, columns=["Chore","Amount","Timestamp"])
-            df["Timestamp"] = pd.to_datetime(df["Timestamp"])
-            df["Date"] = df["Timestamp"].dt.date
-
-            st.write(f"**Last 7 Days:** £{df[df['Timestamp']>=today-timedelta(days=7)]['Amount'].sum():.2f}")
-            st.write(f"**Last 30 Days:** £{df[df['Timestamp']>=today-timedelta(days=30)]['Amount'].sum():.2f}")
-
-            daily_totals = df.groupby("Date")["Amount"].sum().reset_index()
-            st.line_chart(daily_totals.set_index("Date"))
-
-            st.divider()
-            st.subheader("🏅 Achievements")
-            total_done = len(df)
-            badges = []
-            if total_done>=5: badges.append("🥉 Bronze — 5 chores done")
-            if total_done>=10: badges.append("🥈 Silver — 10 chores done")
-            if total_done>=25: badges.append("🥇 Gold — 25 chores done")
-            if total_done>=50: badges.append("🏆 Platinum — 50 chores done")
-            if badges:
-                for b in badges: st.write(b)
-            else:
-                st.info("Complete more chores to earn achievements!")
+            st.success(f"🎉 Congrats {user}, you reached Level {users[user]['level']}!")
 
     # ---------------------------
-    # Settings Tab
+    # SETTINGS TAB
     # ---------------------------
     with tab3:
-        st.subheader("User Settings")
-        if AVATAR_PATH and os.path.exists(AVATAR_PATH):
-            st.image(AVATAR_PATH,width=120)
-        uploaded = st.file_uploader("Upload avatar", type=["png","jpg","jpeg"])
-        if uploaded:
-            path = f"user_data/{user}/avatar_{uploaded.name}"
-            with open(path,"wb") as f: f.write(uploaded.getbuffer())
-            users[user]["avatar"]=path
+        st.subheader("Settings")
+
+        new_color = st.color_picker("Pick your theme color", user_data.get("theme", "#0D1B4C"))
+        if st.button("Update Theme"):
+            users[user]["theme"] = new_color
             save_users(users)
-            st.success("Avatar updated!"); st.rerun()
+            st.success("Theme updated!")
+            st.rerun()
 
-        st.markdown("### 🎨 Theme Color")
-        new_theme = st.color_picker("Pick your color", value=THEME_COLOR)
-        if st.button("Update Theme Color"):
-            users[user]["theme"]=new_theme; save_users(users); st.success(f"Theme updated to {new_theme}"); st.rerun()
-
-        st.markdown("### 💷 Base Amount")
-        new_base = st.number_input("Change Base (£)", min_value=0.0, step=0.1, value=BASE_AMOUNT)
+        new_base = st.number_input("Change Base Weekly Bonus (£)", min_value=0.0, step=0.1, value=user_data.get("base_amount", 1.7))
         if st.button("Update Base Amount"):
-            users[user]["base_amount"]=new_base; save_users(users); st.success(f"Base updated to £{new_base:.2f}"); st.rerun()
+            users[user]["base_amount"] = new_base
+            save_users(users)
+            st.success("Base amount updated!")
+            st.rerun()
 
-        st.markdown("### 🔑 Change Password")
-        old_pass = st.text_input("Current Password", type="password")
-        new_pass = st.text_input("New Password", type="password")
-        confirm_pass = st.text_input("Confirm New Password", type="password")
+        st.markdown("---")
+        st.subheader("Change Password")
+        old_pw = st.text_input("Current Password", type="password")
+        new_pw = st.text_input("New Password", type="password")
+        confirm_pw = st.text_input("Confirm New Password", type="password")
         if st.button("Update Password"):
-            if not verify_password(users[user]["password"], old_pass):
+            if not verify_password(users[user]["password"], old_pw):
                 st.error("Incorrect current password.")
-            elif new_pass != confirm_pass:
-                st.error("Passwords do not match.")
+            elif new_pw != confirm_pw:
+                st.error("New passwords do not match.")
             else:
-                users[user]["password"]=hash_password(new_pass); save_users(users); st.success("Password updated!")
+                users[user]["password"] = hash_password(new_pw)
+                save_users(users)
+                st.success("Password updated successfully!")
+
+        st.markdown("---")
+        if st.button("Logout"):
+            st.session_state.user = None
+            st.rerun()
